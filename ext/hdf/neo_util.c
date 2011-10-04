@@ -619,12 +619,7 @@ void Init_hdf() {
   rb_define_singleton_method(cHdf, "escape", h_escape, 3);
   rb_define_singleton_method(cHdf, "unescape", h_unescape, 3);
 
-  eHdfError = rb_define_class_under(mNeotonic, "HdfError",
-#if RUBY_VERSION_MINOR >= 6
-				    rb_eStandardError);
-#else
-                                    rb_eException);
-#endif
+  eHdfError = rb_define_class_under(mNeotonic, "HdfError", rb_eStandardError);
 
   Init_cs();
 }

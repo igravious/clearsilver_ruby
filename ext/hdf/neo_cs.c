@@ -71,7 +71,7 @@ VALUE c_create (VALUE class) {
 	
 	if (which_cs == CS_TRADITIONAL) rb_raise(eCsError, "already created using the traditional way");
 		
-	r_cs = Data_Make_Struct(class, CSPARSE*, 0, c_free, data);
+	r_cs = Data_Make_Struct(class, CSPARSE*, 0, free, data);
 	rb_obj_call_init(r_cs, 0, NULL);
 	which_cs = CS_REVAMPED;
 	return r_cs;
@@ -85,8 +85,7 @@ VALUE c_use (VALUE self, VALUE oHdf) {
 	
 	if (which_cs != CS_REVAMPED) rb_raise(eCsError, "API mismatch");
 	
-	Data_Get_Struct(oHdf, t_hdfh, hdfh);
-	
+	Data_Get_Struct(oHdf, t_hdfh, hdfh);	
 	if (hdfh == NULL) rb_raise(eHdfError, "must include an Hdf object");
 	
 	if (tmp_hdf) {
@@ -104,8 +103,12 @@ VALUE c_use (VALUE self, VALUE oHdf) {
 	
 	Data_Get_Struct(self, CSPARSE*, data);
 	if (data) {
-		cs_destroy(data);
-		data = NULL;
+		if (*data) {
+			cs_destroy(data);
+			data = NULL;
+		}
+	} else {
+		rb_raise(eCsError, "Seriouly like, is this even possible?!");
 	}
 	*data = cs;
 	return self;
@@ -201,10 +204,5 @@ void Init_cs() {
   rb_define_method(cCs, "parse_string", c_parse_str, 1);
   rb_define_method(cCs, "render", c_render, 0);
 	
-  eCsError = rb_define_class_under(mNeotonic, "CsError",
-#if RUBY_VERSION_MINOR >= 6
-    rb_eStandardError);
-#else
-    rb_eException);
-#endif
+  eCsError = rb_define_class_under(mNeotonic, "CsError", rb_eStandardError);
 }
