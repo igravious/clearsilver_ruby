@@ -53,7 +53,7 @@ module Neo
       end
     end
 
-    def new(obj=nil)
+    def self.new(obj=nil)
       if obj
         Neo::Cs.create_with obj
       else
