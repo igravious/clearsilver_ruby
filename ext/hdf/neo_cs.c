@@ -16,10 +16,19 @@
 static VALUE cCs;
 extern VALUE mNeotonic;
 extern VALUE eHdfError;
+static VALUE eCsError;
 
 VALUE r_neo_error(NEOERR *err);
 
 #define Srb_raise(val) rb_raise(eHdfError, "%s/%d %s",__FILE__,__LINE__,RSTRING(val)->ptr)
+
+#define CS_UNDECIDED -1
+#define CS_TRADITIONAL 1
+#define CS_REVAMPED 2
+
+int which_cs = CS_UNDECIDED;
+
+static HDF *tmp_hdf;
 
 static void c_free (CSPARSE *csd) {
   if (csd) {
@@ -31,14 +40,16 @@ static VALUE c_init (VALUE self) {
   return self;
 }
 
-VALUE c_new (VALUE class, VALUE oHdf) {
+VALUE c_create_with (VALUE class, VALUE oHdf) {
   CSPARSE *cs = NULL;
   NEOERR *err;
   t_hdfh *hdfh;
   VALUE r_cs;
 
-  Data_Get_Struct(oHdf, t_hdfh, hdfh);
+  if (which_cs == CS_REVAMPED) rb_raise(eCsError, "already created using the revamped way");
 
+  Data_Get_Struct(oHdf, t_hdfh, hdfh);
+	
   if (hdfh == NULL) rb_raise(eHdfError, "must include an Hdf object");
 
   err = cs_init (&cs, hdfh->hdf);
@@ -48,15 +59,72 @@ VALUE c_new (VALUE class, VALUE oHdf) {
 
   r_cs = Data_Wrap_Struct(class, 0, c_free, cs);
   rb_obj_call_init(r_cs, 0, NULL);
+  which_cs = CS_TRADITIONAL;
   return r_cs;
 }
 
+VALUE c_create (VALUE class) {
+	CSPARSE **data;
+	CSPARSE *cs = NULL;
+	NEOERR *err;
+	VALUE r_cs;
+	
+	if (which_cs == CS_TRADITIONAL) rb_raise(eCsError, "already created using the traditional way");
+		
+	r_cs = Data_Make_Struct(class, CSPARSE*, 0, c_free, data);
+	rb_obj_call_init(r_cs, 0, NULL);
+	which_cs = CS_REVAMPED;
+	return r_cs;
+}
+
+VALUE c_use (VALUE self, VALUE oHdf) {
+	CSPARSE **data;
+	CSPARSE *cs = NULL;
+	NEOERR *err;
+	t_hdfh *hdfh;
+	VALUE self;
+	
+	if (which_cs != CS_REVAMPED) rb_raise(eCsError, "API mismatch");
+	
+	Data_Get_Struct(oHdf, t_hdfh, hdfh);
+	
+	if (hdfh == NULL) rb_raise(eHdfError, "must include an Hdf object");
+	
+	if (tmp_hdf) {
+		hdf_destroy(&tmp_hdf);
+		tmp_hdf = NULL;
+	}
+	err = hdf_init(&tmp_hdf);
+	if (err) Srb_raise(r_neo_error(err));
+	err = hdf_copy (tmp_hdf, "", hdfh->hdf);
+	if (err) Srb_raise(r_neo_error(err));
+	err = cs_init (&cs, tmp_hdf);
+	if (err) Srb_raise(r_neo_error(err));
+	err = cgi_register_strfuncs(cs);
+	if (err) Srb_raise(r_neo_error(err));
+	
+	Data_Get_Struct(self, CSPARSE*, data);
+	if (data) {
+		cs_destroy(data);
+		data = NULL;
+	}
+	*data = cs;
+	return self;
+}
+
+
 static VALUE c_parse_file (VALUE self, VALUE oPath) {
+  CSPARSE **data;
   CSPARSE *cs = NULL;
   NEOERR *err;
   char *path;
 
-  Data_Get_Struct(self, CSPARSE, cs);
+  if (which_cs == CS_REVAMPED) {
+    Data_Get_Struct(self, CSPARSE*, data);
+	cs = *data;
+  } else {
+    Data_Get_Struct(self, CSPARSE, cs);
+  }
   path = STR2CSTR(oPath);
 
   err = cs_parse_file (cs, path);
@@ -67,12 +135,18 @@ static VALUE c_parse_file (VALUE self, VALUE oPath) {
 
 static VALUE c_parse_str (VALUE self, VALUE oString)
 {
+  CSPARSE **data;
   CSPARSE *cs = NULL;
   NEOERR *err;
   char *s, *ms;
   long l;
 
-  Data_Get_Struct(self, CSPARSE, cs);
+  if (which_cs == CS_REVAMPED) {
+    Data_Get_Struct(self, CSPARSE*, data);
+    cs = *data;
+  } else {
+    Data_Get_Struct(self, CSPARSE, cs);
+  }
   s = rb_str2cstr(oString, &l);
 
   /* This should be changed to use memory from the gc */
@@ -95,13 +169,19 @@ static NEOERR *render_cb (void *ctx, char *buf)
 
 static VALUE c_render (VALUE self)
 {
+  CSPARSE **data;
   CSPARSE *cs = NULL;
   NEOERR *err;
   STRING str;
   VALUE rv;
 
-  Data_Get_Struct(self, CSPARSE, cs);
-
+  if (which_cs == CS_REVAMPED) {
+    Data_Get_Struct(self, CSPARSE*, data);
+    cs = *data;
+  } else {
+    Data_Get_Struct(self, CSPARSE, cs);
+  }
+	
   string_init(&str);
   err = cs_render (cs, &str, render_cb);
   if (err) Srb_raise(r_neo_error(err));
@@ -113,10 +193,19 @@ static VALUE c_render (VALUE self)
 
 void Init_cs() {
   cCs = rb_define_class_under(mNeotonic, "Cs", rb_cObject);
-  rb_define_singleton_method(cCs, "new", c_new, 1);
+  rb_define_singleton_method(cCs, "create_with", c_new, 1);
+  rb_define_singleton_method(cCs, "create", c_new, 0);
 
+  rb_define_method(cCs, "use", c_use, 1);
   rb_define_method(cCs, "initialize", c_init, 0);
   rb_define_method(cCs, "parse_file", c_parse_file, 1);
   rb_define_method(cCs, "parse_string", c_parse_str, 1);
   rb_define_method(cCs, "render", c_render, 0);
+	
+  eCsError = rb_define_class_under(mNeotonic, "CsError",
+#if RUBY_VERSION_MINOR >= 6
+    rb_eStandardError);
+#else
+    rb_eException);
+#endif
 }

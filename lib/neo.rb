@@ -39,7 +39,23 @@ module Clearsilver
   end
 
   class Cs < Neo::Cs
+    alias_method :orig_use, :use
+    def use(obj=nil)
+      case obj
+      when Neo::Hdf
+        orig_use obj
+      else
+        raise TypeError("Expecting an object of class Neo::Hdf, not of class #{obj.class}")
+      end
+    end
 
+    def new(obj=nil)
+      if obj
+        Neo::Cs.create_with obj
+      else
+        Neo::Cs.create
+      end
+    end
   end
 end
 
