@@ -37,8 +37,12 @@ module Clearsilver
     end
 
   end
+  
+end
 
-  class Cs < Neo::Cs
+module Neo
+
+  class Cs
     alias_method :orig_use, :use
     def use(obj=nil)
       case obj
@@ -57,6 +61,5 @@ module Clearsilver
       end
     end
   end
+  
 end
-
-      
