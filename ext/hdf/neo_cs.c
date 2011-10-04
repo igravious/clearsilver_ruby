@@ -82,7 +82,6 @@ VALUE c_use (VALUE self, VALUE oHdf) {
 	CSPARSE *cs = NULL;
 	NEOERR *err;
 	t_hdfh *hdfh;
-	VALUE self;
 	
 	if (which_cs != CS_REVAMPED) rb_raise(eCsError, "API mismatch");
 	
@@ -193,8 +192,8 @@ static VALUE c_render (VALUE self)
 
 void Init_cs() {
   cCs = rb_define_class_under(mNeotonic, "Cs", rb_cObject);
-  rb_define_singleton_method(cCs, "create_with", c_new, 1);
-  rb_define_singleton_method(cCs, "create", c_new, 0);
+  rb_define_singleton_method(cCs, "create_with", c_create_with, 1);
+  rb_define_singleton_method(cCs, "create", c_create, 0);
 
   rb_define_method(cCs, "use", c_use, 1);
   rb_define_method(cCs, "initialize", c_init, 0);
