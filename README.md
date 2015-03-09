@@ -4,18 +4,18 @@ instantiate a `Neo::Cs` object with it.
 
 Like so:
 
-`
+```ruby
 h = Neo::Hdf
 # some stuff
 c = Neo::Cs h
-`
+```
 
 then you need to call:
 
-`
+```ruby
 c.parse_str str
 c.render
-`
+```
 
 Two things to note are that there is no point in passing in other `Hdf` objects
 as only the first gets used. Also `parse_str` remembers the strings so you need
@@ -27,7 +27,7 @@ This means that you can only have one template per ... per what?
 
 My alternate API I have created gives you the option of the following:
 
-`
+```ruby
 h1 = Neo.Hdf
 h2 = Neo.Hdf
 
@@ -38,7 +38,7 @@ c.render
 c.use h2
 c.parse_str str
 c.render
-`
+```
 
 This is because new `Cs`and `Hdf` objects are created internally which is less
 but more how you'd expect it to work.
